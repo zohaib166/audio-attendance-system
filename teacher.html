@@ -25,7 +25,7 @@
   </div>
 
   <script>
-    const SERVER_URL = 'http://localhost:3000';
+    const SERVER_URL = window.location.origin;
     let audioCtx = null;
     let oscillator = null;
     let isRunning = false;
@@ -53,8 +53,22 @@
       }
 
       try {
+        // 1. Sync frequency with Render Backend first
+        const res = await fetch(`${SERVER_URL}/api/set-teacher-freq`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ frequency: targetFreq })
+        });
+
+        if (!res.ok) {
+          throw new Error(`Server returned HTTP status ${res.status}`);
+        }
+
+        // 2. Initialize and play sound
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') await audioCtx.resume();
+        if (audioCtx.state === 'suspended') {
+          await audioCtx.resume();
+        }
 
         oscillator = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
@@ -67,13 +81,6 @@
         gainNode.connect(audioCtx.destination);
         oscillator.start();
 
-        // Propagate frequency to local Node server
-        await fetch(`${SERVER_URL}/api/set-teacher-freq`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ frequency: targetFreq })
-        });
-
         btn.innerText = 'Stop Beacon';
         btn.classList.add('active');
         display.innerText = `Broadcasting at ${targetFreq} Hz`;
@@ -81,7 +88,8 @@
         isRunning = true;
 
       } catch (err) {
-        alert('Error starting audio beacon.');
+        console.error("Beacon Error:", err);
+        alert(`Failed to start beacon: ${err.message}`);
       }
     }
   </script>
