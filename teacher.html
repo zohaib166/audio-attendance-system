@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Teacher Audio Beacon</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; padding: 40px 20px; background-color: #f4f6f9; }
+    .card { background: white; max-width: 450px; margin: auto; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    input, button { padding: 12px; font-size: 16px; margin: 10px 0; border-radius: 8px; width: 100%; border: 1px solid #ccc; box-sizing: border-box; }
+    button.action-btn { background-color: #28a745; color: white; font-weight: bold; border: none; cursor: pointer; font-size: 18px; }
+    button.active { background-color: #dc3545; }
+    #freqDisplay { margin-top: 15px; font-size: 16px; color: #555; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>Classroom Audio Beacon</h2>
+    
+    <label for="customFreq"><strong>Enter Frequency (Hz):</strong></label>
+    <input type="number" id="customFreq" value="15500" placeholder="e.g. 15500">
+
+    <button id="toggleBtn" class="action-btn" onclick="toggleBeacon()">Start Beacon</button>
+    <div id="freqDisplay">Status: Offline</div>
+  </div>
+
+  <script>
+    const SERVER_URL = 'http://localhost:3000';
+    let audioCtx = null;
+    let oscillator = null;
+    let isRunning = false;
+
+    async function toggleBeacon() {
+      const btn = document.getElementById('toggleBtn');
+      const display = document.getElementById('freqDisplay');
+      const freqInput = document.getElementById('customFreq');
+      const targetFreq = parseInt(freqInput.value, 10);
+
+      if (!targetFreq || targetFreq < 100 || targetFreq > 22000) {
+        return alert('Please enter a valid frequency between 100 and 22000 Hz.');
+      }
+
+      if (isRunning) {
+        if (oscillator) oscillator.stop();
+        if (audioCtx) await audioCtx.close();
+        audioCtx = null;
+        btn.innerText = 'Start Beacon';
+        btn.classList.remove('active');
+        display.innerText = 'Status: Offline';
+        freqInput.disabled = false;
+        isRunning = false;
+        return;
+      }
+
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+        oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(targetFreq, audioCtx.currentTime);
+        gainNode.gain.setValueAtTime(0.8, audioCtx.currentTime);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.start();
+
+        // Propagate frequency to local Node server
+        await fetch(`${SERVER_URL}/api/set-teacher-freq`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ frequency: targetFreq })
+        });
+
+        btn.innerText = 'Stop Beacon';
+        btn.classList.add('active');
+        display.innerText = `Broadcasting at ${targetFreq} Hz`;
+        freqInput.disabled = true;
+        isRunning = true;
+
+      } catch (err) {
+        alert('Error starting audio beacon.');
+      }
+    }
+  </script>
+</body>
+</html>

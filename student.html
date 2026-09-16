@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Student Attendance Check-In</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; background-color: #f0f2f5; }
+    .card { background: white; padding: 25px; border-radius: 12px; max-width: 400px; margin: 20px auto; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 6px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; }
+    button { background-color: #007bff; color: white; border: none; font-weight: bold; cursor: pointer; }
+    button:disabled { background-color: #aaa; }
+    #status { margin-top: 15px; font-size: 14px; color: #555; font-weight: bold; }
+    #live-db { margin-top: 10px; font-size: 18px; color: #28a745; font-weight: bold; font-family: monospace; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>Student Check-In</h2>
+
+    <!-- Registration Section -->
+    <div id="setup-section">
+      <p>Enter your full roll number to begin.</p>
+      <input type="text" id="rollNo" placeholder="Roll Number (e.g., 0246CS251001)">
+      <button onclick="registerStudent()">Save Profile</button>
+    </div>
+
+    <!-- Attendance Scanner Section -->
+    <div id="attendance-section" style="display:none;">
+      <p>Logged in as Roll No:<br><strong id="profile-display" style="font-size: 18px; color: #007bff;"></strong></p>
+      
+      <label for="announcedFreq"><strong>Enter Faculty's Frequency (Hz):</strong></label>
+      <input type="number" id="announcedFreq" placeholder="e.g., 15500">
+
+      <button id="scan-btn" onclick="startCheckIn()">Listen & Mark Attendance</button>
+      <div id="live-db">Current Signal: -- dB</div>
+      <p id="status">Status: Ready</p>
+      <button onclick="resetProfile()" style="background:#6c757d; font-size: 12px; padding: 6px; margin-top: 15px;">Change Roll Number</button>
+    </div>
+  </div>
+
+  <script>
+    // Set target server base URL
+    const SERVER_URL = window.location.origin;;
+
+    function getOrCreateDeviceUUID() {
+      let uuid = localStorage.getItem('device_uuid');
+      if (!uuid) {
+        uuid = 'dev-' + crypto.randomUUID();
+        localStorage.setItem('device_uuid', uuid);
+      }
+      return uuid;
+    }
+
+    function checkProfile() {
+      const studentId = localStorage.getItem('student_id');
+      if (studentId) {
+        document.getElementById('setup-section').style.display = 'none';
+        document.getElementById('attendance-section').style.display = 'block';
+        document.getElementById('profile-display').innerText = studentId;
+      }
+    }
+
+    function registerStudent() {
+      const roll = document.getElementById('rollNo').value.trim();
+      if (!roll) return alert('Please enter your full Roll Number.');
+
+      localStorage.setItem('student_id', roll);
+      getOrCreateDeviceUUID();
+      checkProfile();
+    }
+
+    function resetProfile() {
+      localStorage.removeItem('student_id');
+      document.getElementById('setup-section').style.display = 'block';
+      document.getElementById('attendance-section').style.display = 'none';
+    }
+
+    checkProfile();
+
+    async function startCheckIn() {
+      const status = document.getElementById('status');
+      const dbDisplay = document.getElementById('live-db');
+      const btn = document.getElementById('scan-btn');
+      const targetFreq = parseInt(document.getElementById('announcedFreq').value, 10);
+
+      if (!targetFreq) {
+        return alert('Please enter the frequency announced by your teacher.');
+      }
+      
+      btn.disabled = true;
+      status.innerText = `Listening for ${targetFreq} Hz signal...`;
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 8192;
+        source.connect(analyser);
+
+        const sampleRate = audioCtx.sampleRate;
+        const dataArray = new Float32Array(analyser.frequencyBinCount);
+
+        const targetBin = Math.round((targetFreq * analyser.fftSize) / sampleRate);
+        const binRadius = Math.ceil((150 * analyser.fftSize) / sampleRate);
+
+        const checkInterval = setInterval(async () => {
+          analyser.getFloatFrequencyData(dataArray);
+
+          let maxVolume = -160;
+          for (let i = targetBin - binRadius; i <= targetBin + binRadius; i++) {
+            if (i >= 0 && i < dataArray.length) {
+              if (dataArray[i] > maxVolume) {
+                maxVolume = dataArray[i];
+              }
+            }
+          }
+
+          dbDisplay.innerText = `Signal Level: ${maxVolume.toFixed(1)} dB`;
+
+          if (maxVolume > -90) {
+            clearInterval(checkInterval);
+            stream.getTracks().forEach(track => track.stop());
+            audioCtx.close();
+
+            status.innerText = `Signal detected! Submitting attendance...`;
+            await sendAttendance(targetFreq);
+            btn.disabled = false;
+          }
+        }, 100);
+
+        setTimeout(() => {
+          if (btn.disabled && status.innerText.includes('Listening')) {
+            clearInterval(checkInterval);
+            stream.getTracks().forEach(track => track.stop());
+            audioCtx.close();
+            status.innerText = 'Signal not detected. Verify the entered frequency and microphone.';
+            btn.disabled = false;
+          }
+        }, 10000);
+
+      } catch (err) {
+        alert('Microphone permission required.');
+        btn.disabled = false;
+        status.innerText = 'Microphone access denied.';
+      }
+    }
+
+    async function sendAttendance(detectedFreq) {
+      const payload = {
+        studentId: localStorage.getItem('student_id'),
+        deviceUuid: localStorage.getItem('device_uuid'),
+        detectedFrequency: detectedFreq
+      };
+
+      try {
+        const res = await fetch(`${SERVER_URL}/api/mark-attendance`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        
+        if (res.ok && data.success) {
+          document.getElementById('status').innerText = data.message;
+        } else {
+          document.getElementById('status').innerText = `Error: ${data.message || 'Validation failed.'}`;
+        }
+      } catch (err) {
+        document.getElementById('status').innerText = 'Network Error: Cannot reach Node server on port 3000.';
+      }
+    }
+  </script>
+
+</body>
+</html>
