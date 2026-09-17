@@ -11,12 +11,18 @@ app.use(express.static(__dirname));
 
 const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbyvnnMRVtTdCtH3OWY21ESHLfDGBCCThEDnh8xXkw-Xk6qGwEroDKBIvryXSL3O6bp3/exec';
 
+const TEACHER_PASSCODE = '123qwe,./';
+
 let activeTeacherFreq = 15500; 
 const studentDeviceMap = new Map();
 
 // 1. Set Teacher Frequency
 app.post('/api/set-teacher-freq', (req, res) => {
-  const { frequency } = req.body;
+  
+  const { frequency, passcode } = req.body;
+  if (!passcode || passcode !== TEACHER_PASSCODE) {
+    return res.status(401).json({ success: false, message: 'Invalid teacher passcode.' });
+  }
   if (!frequency) return res.status(400).json({ success: false, message: 'Frequency required.' });
 
   activeTeacherFreq = parseInt(frequency, 10);

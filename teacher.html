@@ -17,6 +17,9 @@
   <div class="card">
     <h2>Classroom Audio Beacon</h2>
     
+    <label for="teacherPasscode"><strong>Teacher Passcode:</strong></label>
+    <input type="password" id="teacherPasscode" placeholder="Enter teacher passcode">
+
     <label for="customFreq"><strong>Enter Frequency (Hz):</strong></label>
     <input type="number" id="customFreq" value="15500" placeholder="e.g. 15500">
 
@@ -34,7 +37,13 @@
       const btn = document.getElementById('toggleBtn');
       const display = document.getElementById('freqDisplay');
       const freqInput = document.getElementById('customFreq');
+      const passcodeInput = document.getElementById('teacherPasscode');
       const targetFreq = parseInt(freqInput.value, 10);
+      const passcode = passcodeInput.value.trim();
+
+      if (!passcode) {
+        return alert('Please enter the teacher passcode.');
+      }
 
       if (!targetFreq || targetFreq < 100 || targetFreq > 22000) {
         return alert('Please enter a valid frequency between 100 and 22000 Hz.');
@@ -48,27 +57,28 @@
         btn.classList.remove('active');
         display.innerText = 'Status: Offline';
         freqInput.disabled = false;
+        passcodeInput.disabled = false;
         isRunning = false;
         return;
       }
 
       try {
-        // 1. Sync frequency with Render Backend first
+        // 1. Verify Passcode & Set Frequency on Server
         const res = await fetch(`${SERVER_URL}/api/set-teacher-freq`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ frequency: targetFreq })
+          body: JSON.stringify({ frequency: targetFreq, passcode: passcode })
         });
 
-        if (!res.ok) {
-          throw new Error(`Server returned HTTP status ${res.status}`);
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || 'Authorization failed.');
         }
 
-        // 2. Initialize and play sound
+        // 2. Play Audio Tone
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') {
-          await audioCtx.resume();
-        }
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
 
         oscillator = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
@@ -85,11 +95,11 @@
         btn.classList.add('active');
         display.innerText = `Broadcasting at ${targetFreq} Hz`;
         freqInput.disabled = true;
+        passcodeInput.disabled = true;
         isRunning = true;
 
       } catch (err) {
-        console.error("Beacon Error:", err);
-        alert(`Failed to start beacon: ${err.message}`);
+        alert(`Access Denied: ${err.message}`);
       }
     }
   </script>
