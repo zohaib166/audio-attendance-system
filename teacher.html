@@ -66,10 +66,12 @@
         const res = await fetch(`${SERVER_URL}/api/set-teacher-freq`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ frequency: targetFreq })
+          body: JSON.stringify({ frequency: targetFreq, passcode: passcode })
         });
 
-        if (!res.ok) {
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
           throw new Error(`Server returned HTTP status ${res.status}`);
         }
 
