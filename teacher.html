@@ -17,9 +17,6 @@
   <div class="card">
     <h2>Classroom Audio Beacon</h2>
     
-    <label for="teacherPasscode"><strong>Teacher Passcode:</strong></label>
-    <input type="password" id="teacherPasscode" placeholder="Enter teacher passcode">
-
     <label for="customFreq"><strong>Enter Frequency (Hz):</strong></label>
     <input type="number" id="customFreq" value="15500" placeholder="e.g. 15500">
 
@@ -72,8 +69,8 @@
 
         const data = await res.json();
 
-        if (!res.ok || !data.success) {
-          throw new Error(data.message || 'Authorization failed.');
+        if (!res.ok) {
+          throw new Error(`Server returned HTTP status ${res.status}`);
         }
 
         // 2. Play Audio Tone
