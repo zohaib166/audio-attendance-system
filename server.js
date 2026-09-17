@@ -15,7 +15,7 @@ const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbyvnnMRVtTdCtH
 =======
 // Hardcoded Teacher Passcode
 >>>>>>> 51d48edb1d112fe2fd0fac5279a78859aa60b18e
-const TEACHER_PASSCODE = '123qwe,./';
+const TEACHER_PASSCODE = ';
 
 let activeTeacherFreq = 15500; 
 const studentDeviceMap = new Map();
