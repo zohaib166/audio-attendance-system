@@ -16,6 +16,9 @@
 
   <div class="card">
     <h2>Classroom Audio Beacon</h2>
+
+    <label for="teacherPasscode"><strong>Teacher Passcode:</strong></label>
+    <input type="password" id="teacherPasscode" placeholder="Enter teacher passcode">
     
     <label for="customFreq"><strong>Enter Frequency (Hz):</strong></label>
     <input type="number" id="customFreq" value="15500" placeholder="e.g. 15500">
@@ -34,7 +37,13 @@
       const btn = document.getElementById('toggleBtn');
       const display = document.getElementById('freqDisplay');
       const freqInput = document.getElementById('customFreq');
+      const passcodeInput = document.getElementById('teacherPasscode');
       const targetFreq = parseInt(freqInput.value, 10);
+      const passcode = passcodeInput.value.trim();
+
+      if (!passcode) {
+        return alert('Please enter the teacher passcode.');
+      }
 
       if (!targetFreq || targetFreq < 100 || targetFreq > 22000) {
         return alert('Please enter a valid frequency between 100 and 22000 Hz.');
