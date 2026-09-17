@@ -32,6 +32,8 @@
       
       <label for="announcedFreq"><strong>Enter Faculty's Frequency (Hz):</strong></label>
       <input type="number" id="announcedFreq" placeholder="e.g., 15500">
+        <label for="sessionToken"><strong>Enter Attendance Session Code:</strong></label>
+        <input type="text" id="sessionToken" autocomplete="off" placeholder="Paste the teacher's session code">
 
       <button id="scan-btn" onclick="startCheckIn()">Listen & Mark Attendance</button>
       <div id="live-db">Current Signal: -- dB</div>
@@ -64,7 +66,9 @@
 
     function registerStudent() {
       const roll = document.getElementById('rollNo').value.trim();
-      if (!roll) return alert('Please enter your full Roll Number.');
+        if (!/^[A-Za-z0-9_-]{2,32}$/.test(roll)) {
+          return alert('Enter a valid roll number using 2-32 letters, numbers, hyphens, or underscores.');
+        }
 
       localStorage.setItem('student_id', roll);
       getOrCreateDeviceUUID();
@@ -84,10 +88,14 @@
       const dbDisplay = document.getElementById('live-db');
       const btn = document.getElementById('scan-btn');
       const targetFreq = parseInt(document.getElementById('announcedFreq').value, 10);
+        const sessionToken = document.getElementById('sessionToken').value.trim();
 
       if (!targetFreq) {
         return alert('Please enter the frequency announced by your teacher.');
       }
+        if (!sessionToken) {
+          return alert('Please enter the attendance session code shown by your teacher.');
+        }
       
       btn.disabled = true;
       status.innerText = `Listening for ${targetFreq} Hz signal...`;
@@ -128,7 +136,7 @@
             audioCtx.close();
 
             status.innerText = `Signal detected! Submitting attendance...`;
-            await sendAttendance(targetFreq);
+            await sendAttendance(targetFreq, sessionToken);
             btn.disabled = false;
           }
         }, 100);
@@ -150,11 +158,12 @@
       }
     }
 
-    async function sendAttendance(detectedFreq) {
+    async function sendAttendance(detectedFreq, sessionToken) {
       const payload = {
         studentId: localStorage.getItem('student_id'),
         deviceUuid: localStorage.getItem('device_uuid'),
-        detectedFrequency: detectedFreq
+        detectedFrequency: detectedFreq,
+        sessionToken
       };
 
       try {
